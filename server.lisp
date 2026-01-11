@@ -1,3 +1,6 @@
+; Implements a CoAP server. Users can register handlers on the server to be
+; called when specific resources are requested
+
 (in-package :coap)
 
 ;;;;;;;;;;;;;;; TEST CODE ;;;;;;;;;;;;;;;

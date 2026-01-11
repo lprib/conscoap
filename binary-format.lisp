@@ -1,3 +1,8 @@
+; Low-level serialization and deserialization of CoAP packets
+; important functions:
+; - deserialize-coap-packet
+; - serialize-coap-packet
+
 (in-package :coap)
 
 (defstruct option
