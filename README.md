@@ -5,7 +5,10 @@ This library implements the Constrained Application Protocol
 ## Source files
 - `binary-format.lisp`: packet serialization and deserialization to lisp data
   structures
+- `application-layer.lisp` shared client and server code for higher-level
+  protocol implementation
 - `server.lisp`: CoAP server
+- `client.lisp`: CoAP client
 - `byte-stream.lisp` gray streams implementation for streams backed by a byte
   buffer
 
@@ -13,6 +16,6 @@ This library implements the Constrained Application Protocol
 - [x] CoAP packet parsing and serializing
 - [x] CoAP server
 - [ ] Token tracking
-- [ ] CoAP client
+- [x] CoAP client
 - [ ] Block transfer extension
 - [ ] Observable extension

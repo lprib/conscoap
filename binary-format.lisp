@@ -10,6 +10,9 @@
   value
   serialized-length)
 
+(defun make-string-option (type value)
+  (make-option :type type :value value :serialized-length (length value)))
+
 (defstruct packet
   (version 1)
   type
@@ -243,8 +246,11 @@
 
 (defun serialize-option (stream current-option-number option)
   "serialize an option to the stream with header byte, optional extended delta/length, and option payload"
-  (let ((option-type-number (serialize-or-passthrough-option-type (option-type option))))
-    (multiple-value-bind (delta delta-extended) (encode-varlen-field (- option-type-number current-option-number))
+  (let* ((option-type-number (serialize-or-passthrough-option-type (option-type option)))
+         (unencoded-delta (- option-type-number current-option-number)))
+    (when (minusp unencoded-delta)
+      (error "Option delta ~d (from ~d to ~d) is not increasing" unencoded-delta current-option-number option-type-number))
+    (multiple-value-bind (delta delta-extended) (encode-varlen-field unencoded-delta)
       (multiple-value-bind (length length-extended) (encode-varlen-field (option-serialized-length option))
         (write-byte (logior (ash delta 4) length) stream)
         (loop :for b :in delta-extended :do (write-byte b stream))
@@ -253,6 +259,9 @@
 
 (defun serialize-coap-packet (packet)
   "serialize a struct packet to a byte array"
+  (print (packet-options packet))
+  (sort (packet-options packet) #'<
+        :key (lambda (option) (serialize-or-passthrough-option-type (option-type option))))
   (let ((stream (byte-stream:make-bytes-output-stream))
         (hdr (list 0 0 0 0)))
     (setf (elt hdr 0) (dpb (packet-version packet) (byte 2 6) (elt hdr 0)))

@@ -3,17 +3,6 @@
 
 (in-package :coap)
 
-; TODO move all this to non server specific
-(defun split-path (path)
-  (delete-if (lambda (p) (zerop (length p)))
-             (uiop:split-string path :separator "/")))
-
-(defun resource-path-from-packet (packet)
-  (loop
-    :for option :in (packet-options packet)
-    :when (eq (option-type option) :uri-path)
-    :collect (option-value option)))
-
 (defclass response ()
   ((code
      :initarg :code
