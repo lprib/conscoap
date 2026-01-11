@@ -17,6 +17,17 @@
 
 
 (defmacro defenumfield (name &rest variants)
+  "Generate an associative enum with symbols (names of enum variante) and values (values of enum variants)
+  Syntax:
+    (defenumfield name
+      (:variant value)
+      (:variant2 value))
+  Generates the following functions:
+    (defun serialize-<name> (symbol) value)
+    (defun serialize-or-passthrough-<name> (symbol-or-value) value) ; same as above, but it symbol is not found, pass through the value
+    (defun dserialize-<name> (value) sybol)
+    (defun dserialize-or-passthrough-<name> (symbol-or-value) symbol) ; same as above, but it symbol is not found, pass through the value
+  "
   (let*
       ((alist-name (gensym))
        (upcase-name (string-upcase name))
@@ -35,37 +46,58 @@
        (defun ,deserialize-or-passthrough-enum (value) (or (car (rassoc value ,alist-name)) value)))))
 
 (defenumfield message-code
-  (:get             001)
-  (:post            002)
-  (:put             003)
-  (:delete          004))
+  (:get 001)
+  (:post 002)
+  (:put 003)
+  (:delete 004)
+  (:created 201)
+  (:deleted 202)
+  (:valid 203)
+  (:changed 204)
+  (:content 205)
+  (:bad-request 400)
+  (:unauthorized 401)
+  (:bad-option 402)
+  (:forbidden 403)
+  (:not-found 404)
+  (:method-not-allowed 405)
+  (:not-acceptable 406)
+  (:precondition-failed 412)
+  (:request-entity-too-large 413)
+  (:unsupported-content-format 415)
+  (:internal-server-error 500)
+  (:not-implemented 501)
+  (:bad-gateway 502)
+  (:service-unavailable 503)
+  (:gateway-timeout 504)
+  (:proxying-not-supported 505))
 
 (defun make-message-code (class detail) (+ (* 100 class) detail))
 (defun decompose-message-code (code) (floor code 100))
 
 (defenumfield message-type
-  (:confirmable     0)
+  (:confirmable 0)
   (:non-confirmable 1)
   (:acknowledgement 2)
-  (:reset           3))
+  (:reset 3))
 
 (defenumfield option-type
- (:if-match         1)
- (:uri-host         3)
- (:etag             4)
- (:if-none-match    5)
- (:uri-port         7)
- (:location-path    8)
- (:uri-path         11)
- (:content-format   12)
- (:max-age          14)
- (:uri-query        15)
- (:accept           17)
- (:location-query   20)
- (:proxy-uri        35)
- (:proxy-scheme     39)
- (:size1            60)
- (:request-tag      292))
+  (:if-match 1)
+  (:uri-host 3)
+  (:etag 4)
+  (:if-none-match 5)
+  (:uri-port 7)
+  (:location-path 8)
+  (:uri-path 11)
+  (:content-format 12)
+  (:max-age 14)
+  (:uri-query 15)
+  (:accept 17)
+  (:location-query 20)
+  (:proxy-uri 35)
+  (:proxy-scheme 39)
+  (:size1 60)
+  (:request-tag 292))
 
 (defparameter *option-formats*
  '((:if-match . :opaque)
@@ -103,7 +135,7 @@
       ((stream (byte-stream:make-bytes-input-stream bytes))
        (hdr (loop :for i :from 0 :below 4 :collect (read-byte stream)))
        (version (ldb (byte 2 6) (first hdr)))
-       (typ (ldb (byte 2 4) (first hdr)))
+       (type (ldb (byte 2 4) (first hdr)))
        (token-length (ldb (byte 4 0) (first hdr)))
        (code-class (ldb (byte 3 5) (second hdr)))
        (code-detail (ldb (byte 5 0) (second hdr)))
@@ -120,10 +152,10 @@
       (assert (or (not end-of-header) (= end-of-header #xff))))
     (make-packet
       :version version
-      :type typ
+      :type (deserialize-or-passthrough-message-type type)
       :token-length token-length
       :token token
-      :code (make-message-code code-class code-detail)
+      :code (deserialize-or-passthrough-message-code (make-message-code code-class code-detail))
       :id message-id
       :options options
       :payload (byte-stream:read-bytes stream nil))))
@@ -219,20 +251,25 @@
   (let ((stream (byte-stream:make-bytes-output-stream))
         (hdr (list 0 0 0 0)))
     (setf (elt hdr 0) (dpb (packet-version packet) (byte 2 6) (elt hdr 0)))
-    (setf (elt hdr 0) (dpb (packet-type packet) (byte 2 4) (elt hdr 0)))
+    (setf (elt hdr 0) (dpb (serialize-or-passthrough-message-type (packet-type packet)) (byte 2 4) (elt hdr 0)))
     (setf (elt hdr 0) (dpb (packet-token-length packet) (byte 4 0) (elt hdr 0)))
-    (multiple-value-bind (class detail) (decompose-message-code (packet-code packet))
+    (multiple-value-bind (class detail) (decompose-message-code (serialize-or-passthrough-message-code (packet-code packet)))
       (setf (elt hdr 1) (dpb class (byte 3 5) (elt hdr 1)))
       (setf (elt hdr 1) (dpb detail (byte 5 0) (elt hdr 1))))
     (setf (elt hdr 2) (ash (logand #xff00 (packet-id packet)) -8))
     (setf (elt hdr 3) (logand #xff (packet-id packet)))
-    (loop :for b :in hdr :do (write-byte b stream)))
-  (write-varwidth-int stream (packet-token packet) (packet-token-length packet))
-  (loop
-    :with option-number = 0
-    :for option :in (packet-options packet)
-    :do (serialize-option stream option-number option)
-    :do (setf option-number (serialize-or-passthrough-option-type (option-type option))))
-  (when (plusp (length (packet-payload packet)))
-    (write-byte #xff stream)
-    (loop :for b :across (packet-payload packet) :do (write-byte b stream))))
+    (loop :for b :in hdr :do (write-byte b stream))
+    (write-varwidth-int stream (packet-token packet) (packet-token-length packet))
+    (loop
+      :with option-number = 0
+      :for option :in (packet-options packet)
+      :do (serialize-option stream option-number option)
+      :do (setf option-number (serialize-or-passthrough-option-type (option-type option))))
+    (when (and (packet-payload packet) (plusp (length (packet-payload packet))))
+      (write-byte #xff stream)
+      (etypecase (packet-payload packet)
+        (string
+         (loop :for char :across (packet-payload packet) :do (write-byte (char-code char) stream)))
+        ((array (unsigned-byte 8))
+         (loop :for b :across (packet-payload packet) :do (write-byte b stream)))))
+    (byte-stream:stream-buffer stream)))
