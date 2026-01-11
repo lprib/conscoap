@@ -1,16 +1,19 @@
 (in-package :coap)
 
-(defparameter *server* (usocket:socket-connect nil nil :protocol :datagram :element-type '(unsigned-byte 8) :local-host "0.0.0.0" :local-port 5683))
+;;;;;;;;;;;;;;; TEST CODE ;;;;;;;;;;;;;;;
+#|
+(defparameter *server* (make-instance 'server :port 8888))
+(defun my-handler (request)
+  (declare (ignore request))
+  (make-response :content "hello there"))
 
-(defun hex (arr)
- (loop :for b :across arr :do (format t "~x " b))
- (format t "~%"))
+(server-register-handler *server* "a/b" #'my-handler)
+(server-listen-once *server*)
+|#
 
-(multiple-value-bind (buf len host port) (usocket:socket-receive *server* nil 4096)
-  (declare (ignore host port))
-  (let* ((pkt (make-array len :element-type '(unsigned-byte 8) :displaced-to buf))
-         (des (deserialize-coap-packet pkt)))
-    (rx-packet des)))
+
+
+;;;;;;;;;;;;;;; LIB CODE ;;;;;;;;;;;;;;;
 
 ; TODO move all this to non server specific
 (defun split-path (path)
@@ -52,7 +55,8 @@
           :local-host (slot-value self 'ip)
           :local-port (slot-value self 'port))))
 
-(defmethod listen-once ((server server))
+(defmethod server-listen-once ((server server))
+  "Block waiting for a single packet, and run relevent handler"
   (multiple-value-bind (buf len src-host src-port) (usocket:socket-receive (server-socket server) nil 4096)
     (let* ((bytes (make-array len :element-type '(unsigned-byte 8) :displaced-to buf))
            (packet (deserialize-coap-packet bytes))
@@ -69,8 +73,16 @@
           :host src-host
           :port src-port)))))
 
+(defmethod server-register-handler ((server server) path handler)
+  "Register a handler method on a server for a given resource path
+  path should be a string of the form a/b/c
+  handler should be a function of the form (lambda (request) response) where
+    request is an instance of packet
+    response is an instance of response
 
-(defmethod register-handler ((server server) path handler)
+  Eg. (server-register-handler *server* 'a/b'
+    (lambda (req) (make-response :content 'hi')))
+  "
   (setf (gethash (split-path path) (server-handlers server))
         handler))
 
@@ -92,12 +104,3 @@
 (defun default-404-handler (request)
   (declare (ignore request))
   (make-response :not-found))
-
-(defparameter *server* (make-instance 'server :port 8888))
-(listen-once *server*)
-
-(defun my-handler (request)
-  (declare (ignore request))
-  (make-response :content "hello there"))
-
-(register-handler *server* "a/b" #'my-handler)

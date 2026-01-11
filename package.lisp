@@ -24,10 +24,14 @@
     :packet-options
     :packet-payload
 
-    :make-message-code
-    :decompose-message-code
-    :deserialize-coap-packet
-    :serialize-coap-packet))
+    :response
+    :make-response
+    :response-code
+    :response-payload
+
+    :server
+    :server-listen-once
+    :server-register-handler))
 
         
 
