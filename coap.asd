@@ -10,5 +10,8 @@
   :components
       ((:file "package")
        (:file "byte-stream")
-       (:file "binary-format")))
+       (:file "binary-format")
+       (:file "application-layer")
+       (:file "server")
+       (:file "client")))
        

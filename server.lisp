@@ -3,21 +3,6 @@
 
 (in-package :coap)
 
-;;;;;;;;;;;;;;; TEST CODE ;;;;;;;;;;;;;;;
-#|
-(defparameter *server* (make-instance 'server :port 8888))
-(defun my-handler (request)
-  (declare (ignore request))
-  (make-response :content "hello there"))
-
-(server-register-handler *server* "a/b" #'my-handler)
-(server-listen-once *server*)
-|#
-
-
-
-;;;;;;;;;;;;;;; LIB CODE ;;;;;;;;;;;;;;;
-
 ; TODO move all this to non server specific
 (defun split-path (path)
   (delete-if (lambda (p) (zerop (length p)))
@@ -43,39 +28,18 @@
 (defun make-response (code &optional (payload nil))
   (make-instance 'response :code code :payload payload))
 
-(defclass server ()
-  ((ip :initarg :ip :initform #(0 0 0 0))
-   (port :initarg :port :initform 5683)
-   (socket :initform nil :accessor server-socket)
-   (handlers :initform (make-hash-table :test 'equal) :accessor server-handlers)))
-
-(defmethod initialize-instance :after ((self server) &key &allow-other-keys)
-  (setf (slot-value self 'socket)
-        (usocket:socket-connect
-          nil nil
-          :protocol :datagram
-          :element-type '(unsigned-byte 8)
-          :local-host (slot-value self 'ip)
-          :local-port (slot-value self 'port))))
+(defclass server (endpoint)
+   ((handlers :initform (make-hash-table :test 'equal) :accessor server-handlers)))
 
 (defmethod server-listen-once ((server server))
   "Block waiting for a single packet, and run relevent handler"
-  (multiple-value-bind (buf len src-host src-port) (usocket:socket-receive (server-socket server) nil 4096)
-    (let* ((bytes (make-array len :element-type '(unsigned-byte 8) :displaced-to buf))
-           (packet (deserialize-coap-packet bytes))
-           (path (resource-path-from-packet packet))
-           (handler (or (gethash path (server-handlers server)) #'default-404-handler)))
-      ; for now treat handlers as (lambda (packet) response)
-      (let* ((response (funcall handler packet))
-             (response-packet (construct-matching-response-packet packet response))
-             (serialized-response (serialize-coap-packet response-packet)))
-        (usocket:socket-send
-          (server-socket server)
-          serialized-response
-          (length serialized-response)
-          :host src-host
-          :port src-port)))))
-
+  (multiple-value-bind (client-host client-port request-packet) (endpoint-wait-for-packet server)
+    (let* ((path (resource-path-from-packet request-packet))
+           (handler (or (gethash path (server-handlers server)) #'default-404-handler))
+           (response (funcall handler request-packet))
+           (response-packet (construct-matching-response-packet request-packet response)))
+      (endpoint-send-packet server client-host client-port response-packet))))
+  
 (defmethod server-register-handler ((server server) path handler)
   "Register a handler method on a server for a given resource path
   path should be a string of the form a/b/c
