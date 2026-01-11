@@ -1,17 +1,13 @@
-(defpackage :byte-stream
-  (:use :cl)
-  (:export
-    :read-bytes
-    :peek-byte
-    :make-bytes-input-stream
-    :make-bytes-output-stream
-    :stream-buffer))
 (in-package :byte-stream)
 
 ; Implements gray binary input stream for an underlying (unsigned-char 8) array
 (defclass bytes-input-stream (sb-gray:fundamental-binary-input-stream)
   ((data :initarg :data :reader stream-data)
    (position :initform 0 :accessor stream-position)))
+
+(defmethod initialize-instance :after ((stream bytes-input-stream) &key data &allow-other-keys)
+  (unless (and (arrayp data) (equal (array-element-type data) '(unsigned-byte 8)))
+    (setf (slot-value stream 'data) (coerce data '(simple-array (unsigned-byte 8) (*))))))
 
 (defmethod sb-gray:stream-read-byte ((stream bytes-input-stream))
   (with-accessors ((data stream-data) (position stream-position)) stream
@@ -21,9 +17,10 @@
         :eof)))
 
 (defmethod read-bytes ((stream bytes-input-stream) count &optional (eof-error-p t) (eof-value nil))
-  "Read count bytes from the stream, returning a displaced array"
+  "Read count bytes from the stream, returning a displaced array. count of nil means read the rest"
   (with-accessors ((data stream-data) (position stream-position)) stream
-    (if (<= (+ position count) (length data))
+    (let ((count (or count (- (length data) position))))
+      (if (<= (+ position count) (length data))
         (prog1 (make-array count
                            :element-type (stream-element-type stream)
                            :displaced-to data
@@ -31,7 +28,7 @@
           (incf position count))
         (if eof-error-p
             (error 'end-of-file :stream stream)
-            eof-value))))
+            eof-value)))))
 
 (defmethod stream-element-type ((stream bytes-input-stream)) '(unsigned-byte 8))
 
