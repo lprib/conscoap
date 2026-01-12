@@ -65,8 +65,9 @@
       :return packet))
 
 (defun split-path (path)
-  (delete-if (lambda (p) (zerop (length p))
-               (uiop:split-string path :separator "/"))))
+  (delete-if
+    (lambda (p) (zerop (length p)))
+    (uiop:split-string path :separator "/")))
 
 (defun split-on-first (string char)
   (let ((pos (position char string)))
