@@ -5,8 +5,8 @@
 (defparameter *token-counter* 0)
 (defparameter *id-counter* 0)
 
-(defun gen-request-packet (&key method options payload (type :confirmable))
-  (make-packet
+(defun generate-request-pdu (&key method options payload (type :con))
+  (make-pdu
     :type type
     :code method
     :token-length 1
@@ -18,15 +18,15 @@
 (defun get-request (uri)
   (multiple-value-bind (host port options) (parse-coap-uri uri)
     (let* ((client (make-instance 'client :ip nil :port nil))
-           (request-packet (gen-request-packet :method :get :options options :payload nil))
+           (request-pdu (generate-request-pdu :method :get :options options :payload nil))
            (response-spec (make-instance 'message-spec
-                                         :id (packet-id request-packet)
-                                         :token (packet-token request-packet)
+                                         :id (pdu-id request-pdu)
+                                         :token (pdu-token request-pdu)
                                          ;:host host ;TODO how to compare hosts with dns etc
                                          :port port)))
-      (endpoint-send-packet client host port request-packet)
+      (endpoint-send-pdu client host port request-pdu)
       ; TODO for now, always assume text/plain. need to check Content-Type
       (map 'string #'code-char
-           (packet-payload (endpoint-wait-for-packet client response-spec))))))
+           (pdu-payload (endpoint-wait-for-pdu client response-spec))))))
 
-; (get-request "coap://localhost/time")
+(get-request "coap://localhost/time")

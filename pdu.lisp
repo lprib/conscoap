@@ -1,9 +1,18 @@
 ; Low-level serialization and deserialization of CoAP packets
 ; important functions:
-; - deserialize-coap-packet
-; - serialize-coap-packet
 
 (in-package :coap)
+
+(defconstant +version-field+ 1)
+
+(defstruct pdu
+  type
+  code
+  token-length
+  token
+  id
+  options
+  payload)
 
 (defstruct option
   type
@@ -12,16 +21,6 @@
 
 (defun make-string-option (type value)
   (make-option :type type :value value :serialized-length (length value)))
-
-(defstruct packet
-  (version 1)
-  type
-  code
-  token-length
-  token
-  id
-  options
-  payload)
 
 
 (defmacro defenumfield (name &rest variants)
@@ -84,10 +83,10 @@
 (defun decompose-message-code (code) (floor code 100))
 
 (defenumfield message-type
-  (:confirmable 0)
-  (:non-confirmable 1)
-  (:acknowledgement 2)
-  (:reset 3))
+  (:con 0)
+  (:non 1)
+  (:ack 2)
+  (:rst 3))
 
 (defenumfield option-type
   (:if-match 1)
@@ -137,7 +136,7 @@
                :for shift :from (shift-start bytes) :downto 0 :by 8
                :sum (ash b shift))))))
 
-(defun deserialize-coap-packet (bytes)
+(defun deserialize-coap-pdu (bytes)
   "deserialize coap packet from byte array bytes"
   (let*
       ((stream (byte-stream:make-bytes-input-stream bytes))
@@ -158,8 +157,7 @@
            :collect opt)))
     (let ((end-of-header (read-byte stream nil nil)))
       (assert (or (not end-of-header) (= end-of-header #xff))))
-    (make-packet
-      :version version
+    (make-pdu
       :type (deserialize-or-passthrough-message-type type)
       :token-length token-length
       :token token
@@ -257,32 +255,32 @@
         (loop :for b :in length-extended :do (write-byte b stream))
         (serialize-option-payload stream option)))))
 
-(defun serialize-coap-packet (packet)
-  "serialize a struct packet to a byte array"
-  (sort (packet-options packet) #'<
+(defun serialize-coap-pdu (pdu)
+  "serialize a struct pdu to a byte array"
+  (sort (pdu-options pdu) #'<
         :key (lambda (option) (serialize-or-passthrough-option-type (option-type option))))
   (let ((stream (byte-stream:make-bytes-output-stream))
         (hdr (list 0 0 0 0)))
-    (setf (elt hdr 0) (dpb (packet-version packet) (byte 2 6) (elt hdr 0)))
-    (setf (elt hdr 0) (dpb (serialize-or-passthrough-message-type (packet-type packet)) (byte 2 4) (elt hdr 0)))
-    (setf (elt hdr 0) (dpb (packet-token-length packet) (byte 4 0) (elt hdr 0)))
-    (multiple-value-bind (class detail) (decompose-message-code (serialize-or-passthrough-message-code (packet-code packet)))
+    (setf (elt hdr 0) (dpb +version-field+ (byte 2 6) (elt hdr 0)))
+    (setf (elt hdr 0) (dpb (serialize-or-passthrough-message-type (pdu-type pdu)) (byte 2 4) (elt hdr 0)))
+    (setf (elt hdr 0) (dpb (pdu-token-length pdu) (byte 4 0) (elt hdr 0)))
+    (multiple-value-bind (class detail) (decompose-message-code (serialize-or-passthrough-message-code (pdu-code pdu)))
       (setf (elt hdr 1) (dpb class (byte 3 5) (elt hdr 1)))
       (setf (elt hdr 1) (dpb detail (byte 5 0) (elt hdr 1))))
-    (setf (elt hdr 2) (ash (logand #xff00 (packet-id packet)) -8))
-    (setf (elt hdr 3) (logand #xff (packet-id packet)))
+    (setf (elt hdr 2) (ash (logand #xff00 (pdu-id pdu)) -8))
+    (setf (elt hdr 3) (logand #xff (pdu-id pdu)))
     (loop :for b :in hdr :do (write-byte b stream))
-    (write-varwidth-int stream (packet-token packet) (packet-token-length packet))
+    (write-varwidth-int stream (pdu-token pdu) (pdu-token-length pdu))
     (loop
       :with option-number = 0
-      :for option :in (packet-options packet)
+      :for option :in (pdu-options pdu)
       :do (serialize-option stream option-number option)
       :do (setf option-number (serialize-or-passthrough-option-type (option-type option))))
-    (when (and (packet-payload packet) (plusp (length (packet-payload packet))))
+    (when (and (pdu-payload pdu) (plusp (length (pdu-payload pdu))))
       (write-byte #xff stream)
-      (etypecase (packet-payload packet)
+      (etypecase (pdu-payload pdu)
         (string
-         (loop :for char :across (packet-payload packet) :do (write-byte (char-code char) stream)))
+         (loop :for char :across (pdu-payload pdu) :do (write-byte (char-code char) stream)))
         ((array (unsigned-byte 8))
-         (loop :for b :across (packet-payload packet) :do (write-byte b stream)))))
+         (loop :for b :across (pdu-payload pdu) :do (write-byte b stream)))))
     (byte-stream:stream-buffer stream)))

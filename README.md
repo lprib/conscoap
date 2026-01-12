@@ -3,7 +3,7 @@ This library implements the Constrained Application Protocol
 ([RFC7252](https://datatracker.ietf.org/doc/html/rfc7252)) in common lisp.
 
 ## Source files
-- `binary-format.lisp`: packet serialization and deserialization to lisp data
+- `pdu.lisp`: packet serialization and deserialization to lisp data
   structures
 - `application-layer.lisp` shared client and server code for higher-level
   protocol implementation

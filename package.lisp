@@ -15,14 +15,14 @@
     :option-value
     :option-serialized-length
 
-    :make-packet
-    :packet-version
-    :packet-type
-    :packet-token-length
-    :packet-token
-    :packet-id
-    :packet-options
-    :packet-payload
+    :make-pdu
+    :pdu-version
+    :pdu-type
+    :pdu-token-length
+    :pdu-token
+    :pdu-id
+    :pdu-options
+    :pdu-payload
 
     :response
     :make-response
