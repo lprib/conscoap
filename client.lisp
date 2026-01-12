@@ -14,17 +14,6 @@
     :id (prog1 *id-counter* (incf *id-counter*))
     :options options
     :payload payload))
-
-(defmethod client-request ((client client) method host port &optional options payload (type :confirmable))
-  (endpoint-send-packet client host port
-    (make-packet
-      :type type
-      :code method
-      :token-length 1 ;TODO needs to by dynamic
-      :token (prog1 *token-counter)
-      :id 0
-      :options options
-      :payload payload)))
   
 (defun get-request (uri)
   (multiple-value-bind (host port options) (parse-coap-uri uri)
