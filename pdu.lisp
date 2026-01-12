@@ -6,51 +6,33 @@
 (defconstant +version-field+ 1)
 
 (defstruct pdu
-  type
-  code
-  token-length
-  token
-  id
-  options
-  payload)
+  ; message type. :con :non :ack :rst
+  (type :con :type (member :con :non :ack :rst))
+  ; message request/response code. Eg :get or :not-found
+  (code :get :type (or symbol integer))
+  ; Length of token field
+  (token-length 0 :type integer)
+  ; Value of token field
+  (token 0 :type integer)
+  ; Message ID
+  (id 0 :type integer)
+  ; List of struct option options
+  (options nil :type list)
+  ; Optional payload
+  (payload nil :type (or null string (array (unsigned-byte 8)))))
 
 (defstruct option
-  type
-  value
-  serialized-length)
+  ; Option type eg :uri-path or integer
+  (type :uri-path :type (or symbol integer))
+  ; Option value
+  (value 0 :type (or integer string (array unsigned-byte 8)))
+  ; On-the-wire length of option value. This must match (length (option-value
+  ; value)) unless the value is an integer, in which case it represents the
+  ; byte width of the int.
+  (serialized-length 1 :type integer))
 
 (defun make-string-option (type value)
   (make-option :type type :value value :serialized-length (length value)))
-
-
-(defmacro defenumfield (name &rest variants)
-  "Generate an associative enum with symbols (names of enum variante) and values (values of enum variants)
-  Syntax:
-    (defenumfield name
-      (:variant value)
-      (:variant2 value))
-  Generates the following functions:
-    (defun serialize-<name> (symbol) value)
-    (defun serialize-or-passthrough-<name> (symbol-or-value) value) ; same as above, but it symbol is not found, pass through the value
-    (defun dserialize-<name> (value) sybol)
-    (defun dserialize-or-passthrough-<name> (symbol-or-value) symbol) ; same as above, but it symbol is not found, pass through the value
-  "
-  (let*
-      ((alist-name (gensym))
-       (upcase-name (string-upcase name))
-       (their-package (symbol-package name))
-       (serialize-enum (intern (format nil "SERIALIZE-~a" upcase-name) their-package))
-       (serialize-or-passthrough-enum (intern (format nil "SERIALIZE-OR-PASSTHROUGH-~a" upcase-name) their-package))
-       (deserialize-enum (intern (format nil "DESERIALIZE-~a" upcase-name) their-package))
-       (deserialize-or-passthrough-enum (intern (format nil "DESERIALIZE-OR-PASSTHROUGH-~a" upcase-name) their-package)))
-    `(progn
-       (defparameter ,alist-name
-         (list ,@(loop :for variant :in variants
-                       :collect `(cons ,(first variant) ,(second variant)))))
-       (defun ,serialize-enum (sym) (cdr (assoc sym ,alist-name)))
-       (defun ,serialize-or-passthrough-enum (sym) (or (cdr (assoc sym ,alist-name)) sym))
-       (defun ,deserialize-enum (value) (car (rassoc value ,alist-name)))
-       (defun ,deserialize-or-passthrough-enum (value) (or (car (rassoc value ,alist-name)) value)))))
 
 (defenumfield message-code
   (:get 001)
@@ -214,7 +196,7 @@
     :for byte = (logand #xff (ash int (- shift)))
     :do (write-byte byte stream)))
 
-(defun serialize-option-payload (stream option)
+(defun serialize-option-value (stream option)
   (etypecase (option-value option)
     (integer
       (write-varwidth-int stream (option-value option) (or (option-serialized-length option) 4)))
@@ -253,7 +235,7 @@
         (write-byte (logior (ash delta 4) length) stream)
         (loop :for b :in delta-extended :do (write-byte b stream))
         (loop :for b :in length-extended :do (write-byte b stream))
-        (serialize-option-payload stream option)))))
+        (serialize-option-value stream option)))))
 
 (defun serialize-coap-pdu (pdu)
   "serialize a struct pdu to a byte array"

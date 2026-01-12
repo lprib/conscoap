@@ -10,6 +10,7 @@
   :components
       ((:file "package")
        (:file "byte-stream")
+       (:file "enum-field")
        (:file "pdu")
        (:file "application-layer")
        (:file "server")

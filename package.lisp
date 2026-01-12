@@ -10,11 +10,7 @@
 (defpackage :coap
   (:use :cl)
   (:export
-    :make-option
-    :option-type
-    :option-value
-    :option-serialized-length
-
+    :pdu
     :make-pdu
     :pdu-version
     :pdu-type
@@ -24,6 +20,12 @@
     :pdu-options
     :pdu-payload
 
+    :option
+    :make-option
+    :option-type
+    :option-value
+    :option-serialized-length
+
     :response
     :make-response
     :response-code
@@ -31,5 +33,8 @@
 
     :server
     :server-listen-once
-    :server-register-handler))
+    :server-register-handler
+
+    :client
+    :get-request))
 
