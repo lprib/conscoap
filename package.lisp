@@ -26,6 +26,10 @@
     :option-value
     :option-serialized-length
 
+    :resource
+    :make-resource
+    :resource-add-handler
+
     :response
     :make-response
     :response-code

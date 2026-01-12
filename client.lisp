@@ -29,4 +29,4 @@
       (map 'string #'code-char
            (pdu-payload (endpoint-wait-for-pdu client response-spec))))))
 
-(get-request "coap://localhost/time")
+(get-request "coap://localhost/example_data")

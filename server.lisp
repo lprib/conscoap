@@ -3,6 +3,41 @@
 
 (in-package :coap)
 
+; A resource is a path that the server will respond to
+(defclass resource ()
+  ((path
+     :initarg :path
+     :reader resource-path
+     :documentation "single string path")
+   (path-parts
+     :initform nil
+     :reader resource-path-parts
+     :documentation "list of strings for each path part")
+   (handlers
+     :initarg :handlers
+     :accessor resource-handlers
+     :initform '(:get nil :post nil :put nil :delete nil)
+     :documentation "handlers for various operations")))
+
+(defmethod initialize-instance :after ((instance resource) &key path &allow-other-keys)
+  (setf (slot-value instance 'path-parts) (split-path path)))
+
+(defun make-resource (path &key (get-handler nil) (post-handler nil) (put-handler nil) (delete-handler nil))
+  (make-instance 'resource
+    :path path
+    :handlers (list :get get-handler :post post-handler :put put-handler :delete delete-handler)))
+
+(defmethod resource-add-handler ((resource resource) method handler)
+  (unless (member method '(:get :post :put :delete))
+    (error "unknown handler method ~a" method))
+  (setf (getf (resource-handlers resource) method) handler))
+
+; TODO(liam) add this to the server and add methods for searching available
+; handlers. Change lookup to return 404 if no resource and method not allowed
+; if no handler for that method
+
+
+
 (defclass response ()
   ((code
      :initarg :code
