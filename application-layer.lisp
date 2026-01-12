@@ -1,8 +1,30 @@
 (in-package :coap)
 
 (defconstant +pkt-buffer-len+ 4096)
-(defconstant +coap-uri-prefix+ "coap://")
+(defparameter +coap-uri-prefix+ "coap://")
 (defconstant +default-port+ 5683)
+
+(defclass message-spec ()
+  ((id :initarg :id :reader message-spec-id)
+   (token :initarg :token :initform nil :reader message-spec-token)
+   (type :initarg :type :initform nil :reader message-spec-type)
+   (host :initarg :host :initform nil :reader message-spec-host)
+   (port :initarg :port :initform nil :reader message-spec-port)))
+
+(defun matches-spec-p (spec packet &optional src-host src-port)
+  (with-accessors
+    ((spec-id message-spec-id)
+     (spec-token message-spec-token)
+     (spec-type message-spec-type)
+     (spec-host message-spec-host)
+     (spec-port message-spec-port))
+    spec
+    (and
+      (or (not spec-id) (equal spec-id (packet-id packet)))
+      (or (not spec-token) (equal spec-token (packet-token packet)))
+      (or (not spec-type) (equal spec-type (packet-type packet)))
+      (or (not spec-host) (not src-host) (equal spec-host src-host))
+      (or (not spec-port) (not src-port) (equal spec-port src-port)))))
 
 (defclass endpoint ()
   ((ip :initarg :ip :initform #(0 0 0 0))
@@ -27,8 +49,7 @@
       :host host
       :port port)))
 
-(defmethod endpoint-wait-for-packet ((endpoint endpoint))
-  "wait for a single packet on the endpoint. returns (values host port deserialized-packet)"
+(defmethod endpoint-wait-for-any-packet ((endpoint endpoint))
   (multiple-value-bind
       (buf len host port)
       (usocket:socket-receive (endpoint-socket endpoint) nil +pkt-buffer-len+)
@@ -36,9 +57,16 @@
        (values host port (deserialize-coap-packet bytes)))))
 
 
+(defmethod endpoint-wait-for-packet ((endpoint endpoint) message-spec)
+  "wait for a single packet on the endpoint. returns (values host port deserialized-packet)"
+  (loop
+    :for (host port packet) = (multiple-value-list (endpoint-wait-for-any-packet endpoint))
+    :when (matches-spec-p message-spec packet host port)
+      :return packet))
+
 (defun split-path (path)
-  (delete-if (lambda (p) (zerop (length p)))
-             (uiop:split-string path :separator "/")))
+  (delete-if (lambda (p) (zerop (length p))
+               (uiop:split-string path :separator "/"))))
 
 (defun split-on-first (string char)
   (let ((pos (position char string)))
