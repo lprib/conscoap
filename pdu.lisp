@@ -25,7 +25,7 @@
   ; Option type eg :uri-path or integer
   (type :uri-path :type (or symbol integer))
   ; Option value
-  (value 0 :type (or integer string (array unsigned-byte 8)))
+  (value 0 :type (or integer string (array (unsigned-byte 8))))
   ; On-the-wire length of option value. This must match (length (option-value
   ; value)) unless the value is an integer, in which case it represents the
   ; byte width of the int.
