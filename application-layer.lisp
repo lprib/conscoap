@@ -97,7 +97,7 @@
                       (make-string-option :uri-path path-part))
                 (loop :for query :in queries :collect
                       (make-string-option :uri-query query))))))))))
-            
+
 (defun resource-path-from-packet (packet)
   (loop
     :for option :in (packet-options packet)

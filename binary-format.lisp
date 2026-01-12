@@ -259,7 +259,6 @@
 
 (defun serialize-coap-packet (packet)
   "serialize a struct packet to a byte array"
-  (print (packet-options packet))
   (sort (packet-options packet) #'<
         :key (lambda (option) (serialize-or-passthrough-option-type (option-type option))))
   (let ((stream (byte-stream:make-bytes-output-stream))

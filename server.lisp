@@ -28,7 +28,7 @@
            (response (funcall handler request-packet))
            (response-packet (construct-matching-response-packet request-packet response)))
       (endpoint-send-packet server client-host client-port response-packet))))
-  
+
 (defmethod server-register-handler ((server server) path handler)
   "Register a handler method on a server for a given resource path
   path should be a string of the form a/b/c
