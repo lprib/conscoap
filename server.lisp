@@ -23,20 +23,35 @@
   (setf (slot-value instance 'path-parts) (split-path path)))
 
 (defun make-resource (path &key (get-handler nil) (post-handler nil) (put-handler nil) (delete-handler nil))
+  "Make a coap resource.
+    Path is string.
+    handlers are of the form (lambda (pdu) response),
+      where pdu is struct pdu and response is class response"
   (make-instance 'resource
     :path path
     :handlers (list :get get-handler :post post-handler :put put-handler :delete delete-handler)))
 
 (defmethod resource-add-handler ((resource resource) method handler)
+  "Add a handler for the given method to a pre-existing resource. nil to remove handler"
   (unless (member method '(:get :post :put :delete))
     (error "unknown handler method ~a" method))
   (setf (getf (resource-handlers resource) method) handler))
 
-; TODO(liam) add this to the server and add methods for searching available
-; handlers. Change lookup to return 404 if no resource and method not allowed
-; if no handler for that method
+(defun make-simple-response-handler (code)
+  (lambda (request)
+    (declare (ignore request))
+    (make-response code)))
 
+(defparameter *404-resource*
+  (let ((return-404 (make-simple-response-handler :not-found)))
+    (make-resource
+      ""
+      :get-handler return-404
+      :post-handler return-404
+      :put-handler return-404
+      :delete-handler return-404)))
 
+(defparameter *405-handler* (make-simple-response-handler :method-not-allowed))
 
 (defclass response ()
   ((code
@@ -53,29 +68,21 @@
   (make-instance 'response :code code :payload payload))
 
 (defclass server (endpoint)
-   ((handlers :initform (make-hash-table :test 'equal) :accessor server-handlers)))
+   ((resources :initform (make-hash-table :test 'equal) :accessor server-resources)))
 
 (defmethod server-listen-once ((server server))
-  "Block waiting for a single packet, and run relevent handler"
-  (multiple-value-bind (client-host client-port request-pdu) (endpoint-wait-for-pdu server)
-    (let* ((path (resource-path-from-pdu request-pdu))
-           (handler (or (gethash path (server-handlers server)) #'default-404-handler))
+  "Listen for a single packet and respond"
+  (multiple-value-bind (client-host client-port request-pdu) (endpoint-wait-for-any-pdu server)
+    (let* ((path-parts (resource-path-from-pdu request-pdu))
+           (resource (or (gethash path-parts (server-resources server)) *404-resource*))
+           (handler (or (getf (resource-handlers resource) (pdu-code request-pdu)) *405-handler*))
            (response (funcall handler request-pdu))
            (response-pdu (construct-matching-response-pdu request-pdu response)))
       (endpoint-send-pdu server client-host client-port response-pdu))))
 
-(defmethod server-register-handler ((server server) path handler)
-  "Register a handler method on a server for a given resource path
-  path should be a string of the form a/b/c
-  handler should be a function of the form (lambda (request) response) where
-    request is an instance of pdu
-    response is an instance of response
-
-  Eg. (server-register-handler *server* 'a/b'
-    (lambda (req) (make-response :content 'hi')))
-  "
-  (setf (gethash (split-path path) (server-handlers server))
-        handler))
+(defmethod server-add-resource ((server server) resource)
+  "Add resource to server's resource table"
+  (setf (gethash (resource-path-parts resource) (server-resources server)) resource))
 
 (defun construct-matching-response-pdu (request-pdu response)
   "Make a matching response pdu form the request pdu.
@@ -91,7 +98,3 @@
     :token (pdu-token request-pdu)
     :id (pdu-id request-pdu)
     :payload (response-payload response)))
-
-(defun default-404-handler (request)
-  (declare (ignore request))
-  (make-response :not-found))

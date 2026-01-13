@@ -37,7 +37,7 @@
 
     :server
     :server-listen-once
-    :server-register-handler
+    :server-add-resource
 
     :client
     :get-request))
