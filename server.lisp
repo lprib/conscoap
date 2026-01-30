@@ -17,25 +17,35 @@
      :initarg :handlers
      :accessor resource-handlers
      :initform '(:get nil :post nil :put nil :delete nil)
-     :documentation "handlers for various operations")))
+     :documentation "handlers for various operations. Each handler takes
+     (server req) and returns either a string or a response class")
+   (attributes
+     :initarg :attributes
+     :initform nil
+     :accessor resource-attributes
+     :documentation "attributes to add to .well-known/core. Alist of (string . string)")))
 
 (defmethod initialize-instance :after ((instance resource) &key path &allow-other-keys)
-  (setf (slot-value instance 'path-parts) (split-path path)))
+ (setf (slot-value instance 'path-parts) (split-path path)))
 
-(defun make-resource (path &key (get-handler nil) (post-handler nil) (put-handler nil) (delete-handler nil))
+(defun make-resource (path &key (attributes nil) (get-handler nil) (post-handler nil) (put-handler nil) (delete-handler nil))
   "Make a coap resource.
     Path is string.
     handlers are of the form (lambda (pdu) response),
       where pdu is struct pdu and response is class response"
   (make-instance 'resource
     :path path
-    :handlers (list :get get-handler :post post-handler :put put-handler :delete delete-handler)))
+    :handlers (list :get get-handler :post post-handler :put put-handler :delete delete-handler)
+    :attributes attributes))
 
 (defmethod resource-add-handler ((resource resource) method handler)
   "Add a handler for the given method to a pre-existing resource. nil to remove handler"
   (unless (member method '(:get :post :put :delete))
     (error "unknown handler method ~a" method))
   (setf (getf (resource-handlers resource) method) handler))
+
+(defmethod resource-add-attribute ((resource resource) key value)
+  (setf (resource-attributes resource) (acons key value (resource-attributes resource))))
 
 (defun make-simple-response-handler (code)
   (lambda (request)
@@ -83,6 +93,10 @@
 (defmethod server-add-resource ((server server) resource)
   "Add resource to server's resource table"
   (setf (gethash (resource-path-parts resource) (server-resources server)) resource))
+
+(defmethod server-get-resource ((server server) path)
+  "Get resource via string path"
+  (gethash (split-path path) (server-resources server)))
 
 (defun construct-matching-response-pdu (request-pdu response)
   "Make a matching response pdu form the request pdu.
