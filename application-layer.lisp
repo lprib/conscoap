@@ -49,6 +49,18 @@
       :host host
       :port port)))
 
+;; IDEA:
+; endpoint-poll-sockets polls rx sockets for any packets
+;
+; Add new endpoint-io-process which polls sockets and processes incoming packet queues
+;
+; Need to keep track of time for resends and timeouts, add a timer class which
+; is updated each time endpoint-poll-sockes is called. THen when we do
+; io-process, timers can trigger resends
+(defmethod endpoint-poll-sockets ((endpoint endpoint) timeout)
+  (multiple-value-bind (sockets remaining-time) (usocket:wait-for-input (endpoint-socket endpoint) :timeout timeout)
+    (declare (ignore sockets) (ignore remaining-time))))
+
 (defmethod endpoint-wait-for-any-pdu ((endpoint endpoint))
   (multiple-value-bind
       (buf len host port)
